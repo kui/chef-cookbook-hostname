@@ -30,15 +30,13 @@ if fqdn
   fqdn =~ /^([^.]+)/
   hostname = $1
 
-  file '/etc/hostname' do
+  hostname_file = file '/etc/hostname' do
     content "#{hostname}\n"
     mode "0644"
-    notifies :reload, "ohai[reload]"
   end
 
-  execute "hostname #{hostname}" do
+  exec_hostname = execute "hostname #{hostname}" do
     only_if { node['hostname'] != hostname }
-    notifies :reload, "ohai[reload]"
   end
 
   hostsfile_entry "localhost" do
@@ -47,16 +45,19 @@ if fqdn
    action :create
   end
 
-  hostsfile_entry "set hostname" do
+  hostname_entry = hostsfile_entry "set hostname" do
     ip_address "127.0.1.1"
     hostname fqdn
     aliases [ hostname ]
     action :create
-    notifies :reload, "ohai[reload]"
   end
 
-  ohai "reload" do
-    action :nothing
+  ohai 'reload for hostname and fqdn' do
+    only_if do
+      [hostname_file, exec_hostname, hostname_entry].
+        map(&:updated_by_last_action?).any?
+    end
+    action :reload
   end
 else
   log "Please set the set_fqdn attribute to desired hostname" do
